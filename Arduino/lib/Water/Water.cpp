@@ -5,8 +5,7 @@
 #include "Arduino.h"
 #include "Water.h"
 
-Water::Water(int motor,int relayNum,int flowPin,int amount,int type,int countsPerCentiliter = 1)
-{
+Water::Water(int motor,int relayNum,int flowPin,int amount,int type,int countsPerCentiliter) {
   _motor = motor;
   _relayNum = relayNum;
   _flowPin = flowPin;
@@ -22,29 +21,31 @@ int Water::run() {
   //Enable interrupt on the flow sensor
   attachInterrupt(_flowPin,counter,RISING);  
   interrupts();
+  count = 0;
+  previousTime = millis();
+  currentTime = millis();
 
   if (_type == 0) {
     Serial.println("Water seconds...");
     seconds();
-    return 1;
   } else if (_type == 1) {
     Serial.println("Water counts...");
-    return amountOfCentiliters();
+    amountOfCentiliters();
   } else if (_type == 2) {
     Serial.println("Water centiliters...");
-    return numberOfcounts();
+    numberOfcounts();
   } else {
-    // type was not 0 or 1, error in input, don't do anything
+    // type was not 0, 1 or 2, error in input, don't do anything
+    Serial.println("Unknown type");
     detachInterrupt(_flowPin);
-    noInterrupts();
-    return -1;
+    return 1;
   }
-
+  Serial.println("DONE");
+  // Turn off everything
   detachInterrupt(_flowPin);
-  noInterrupts();
   analogWrite(_motor,0);
   analogWrite(_relayNum,0);
-  return true;
+  return 0;
 }
 
 void Water::counter() {
@@ -56,14 +57,12 @@ bool Water::statusOK() {
     // If the counter didn't increase at all after 3 s something is wrong 
       analogWrite(_motor,0);
       analogWrite(_relayNum,0);
+      Serial.println("Timeout after 3 s, no flow detected");
       return false;
-  
   } else {
       return true;
   }
 }
-
-
 
 int Water::seconds() {
   // Use time in seconds as amount
@@ -73,10 +72,11 @@ int Water::seconds() {
   while ((currentTime - previousTime) < _amount*1000) {
     //Wait until the desired _amount is reached
     if ( !statusOK() ) {
-      return -1;
+      return 1;
     }
     currentTime = millis();
   } 
+  return 0;
 }
 
 int Water::amountOfCentiliters() {
@@ -87,10 +87,11 @@ int Water::amountOfCentiliters() {
   while (count/_countsPerCentiliter < _amount) {
     //Wait until the desired amount is reached
     if ( !statusOK() ) {
-      return -1;
+      return 1;
     }
     currentTime = millis();
   }
+  return 0;
 }
 
 int Water::numberOfcounts() {
@@ -99,10 +100,11 @@ int Water::numberOfcounts() {
   analogWrite(_motor,255);
   analogWrite(_relayNum,255);
   while (count < _amount) {
-    //Wait until the desired _amount is reached
+    //Wait until the desired amount is reached
     if ( !statusOK() ) {
-      return -1;
+      return 1;
     }
     currentTime = millis();
   }
+  return 0;
 }

@@ -1,4 +1,10 @@
-int flowPin = 3;    //This is the input pin on the Arduino
+#include <Water.h>
+
+// Flow sensor is physically connected to pin 3, which is interrupt pin 1
+// Using the follwoing code should work, but it doesn't for some reason
+// int flowPin = digitalPinToInterrupt(3)
+int flowPin = 1;    //This is the input pin on the Arduino
+
 int ledPin = 13;
 int motor = 4;  //Digital pins
 int relay[] = {5,6,7,8,9,10,11,12}; //Digital pins
@@ -14,13 +20,9 @@ char stopFlag = ')'; // Marks end of serial command
 String tempValue;
 int commandValue[] = {-1, -1, -1, -1}; // Contains values for commands
 int commaIndex[] = {0, 0}; // Is used to store index of substrings
-
-volatile int count; //This integer needs to be set as volatile to ensure it updates correctly during the interrupt process.  
-
 String stringCommand = ""; // String to hold incoming data
 boolean newCommand = false;  // Tells if the string is complete
 
-  
 void setup() {
   // put your setup code here, to run once:
   pinMode(flowPin, INPUT);           //Sets the pin as an input
@@ -34,15 +36,21 @@ void setup() {
   for (int k=0; k<8; k++) {
     pinMode(sensor[k], OUTPUT);
   }
-        
-  // Not really confident on how the attachInterrupt function works here, but it seems to do the job 
-  attachInterrupt(1, Counter, RISING);  
-  Serial.begin(9600);  //Start Serial
-  interrupts();   //Enables interrupts on the Arduino 
-  
+  //Start Serial communication to Raspberry Pi
+  Serial.begin(9600);    
 }
+
+int amount = 10;
+int type = 0;
+int out;
+
+// The intterrupt counter has to be declared
+//https://arduino.stackexchange.com/questions/20608/pass-classs-public-function-as-an-argument-to-external-command
+volatile int Water::count;
+
 void loop() {
   if (newCommand) {
+    
     // Parsing the string containg command and values 
     commaIndex[0] = 1;
     commaIndex[1] = stringCommand.indexOf(',');
@@ -64,13 +72,28 @@ void loop() {
     commaIndex[1] = stringCommand.indexOf(')', commaIndex[0]+1);
     tempValue = stringCommand.substring(commaIndex[0], commaIndex[1]);
     commandValue[valueInd] = tempValue.toInt();
-
+    
+    
+    Serial.println(stringCommand);
+    Serial.println(command);
+    Serial.println(commandValue[0]);
+    Serial.println(commandValue[1]);
+    Serial.println(commandValue[2]);
+    
     // Switch between commands
     if (String("water") == command) {
-      // Call command water with arguments
-      // Maybe also write something back on serial to confirm command
-      //Serial.print("");
-      Water(commandValue[0], commandValue[1], commandValue[2]);
+    // Call command water with arguments
+      
+      amount = commandValue[1];
+      type = commandValue[0];
+      
+      Water waterObject(motor,relay[1],flowPin,amount,type,countsPerCentiliter);
+      // The intterrupt counter has to be declared
+      //https://arduino.stackexchange.com/questions/20608/pass-classs-public-function-as-an-argument-to-external-command
+          
+      waterObject.run();
+
+//      Water(commandValue[0], commandValue[1], commandValue[2]);
     } else if (String("read") == command) {
       // Call command read with arguments and return sensor values
       Serial.println(ReadSensor(commandValue[0]));
@@ -87,74 +110,12 @@ void loop() {
     }
     // clear the string:
     stringCommand = "";
+    commandValue[0] = -1;
+    commandValue[1] = -1;
+    commandValue[2] = -1;
+    commandValue[3] = -1;
     newCommand = false;
   }
-}
-
-void Counter() {
-   count++; //Every time this function is called, increment "count" by 1
-}
-
-int Water(int num,int amount,int type) {
-  count = 0;
-  previousTime = millis();
-  currentTime = millis();
-  if (type == 0) {
-    // Use time in seconds as amount
-    Serial.println("Water seconds...");
-    // Start motor and open relay
-    analogWrite(motor,255);
-    analogWrite(relay[num],255);
-    
-    while ((currentTime - previousTime) < amount*1000) {
-      //Wait until the desired amount is reached
-      if (count < 10 && currentTime - previousTime > 3000) {
-        // If the counter didn't increase at all after 3 s something is wrong 
-          analogWrite(motor,0);
-          analogWrite(relay[num],0);
-          return -1;
-      }
-      currentTime = millis();
-    }
-  } else if (type == 1) {
-    // Use number of centiliters as limit
-    Serial.println("Water centiliters...");
-    // Start motor and open relay
-    analogWrite(motor,255);
-    analogWrite(relay[num],255);
-    while (count/countsPerCentiliter < amount) {
-      //Wait until the desired amount is reached
-      if (count < 10 && (currentTime - previousTime) > 3000) {
-        // If the counter didn't increase at all after 3 s something is wrong 
-          analogWrite(motor,0);
-          analogWrite(relay[num],0);
-          return -1;
-      }
-      currentTime = millis();
-    }
-  } else if (type == 2) {
-    // Use number of counts as limit
-    Serial.println("Water counts...");
-    // Start motor and open relay
-    analogWrite(motor,255);
-    analogWrite(relay[num],255);
-    while (count < amount) {
-      //Wait until the desired amount is reached
-      if (count < 10 && currentTime - previousTime > 3000) {
-        // If the counter didn't increase at all after 3 s something is wrong 
-        analogWrite(motor,0);
-        analogWrite(relay[num],0);
-        return -1;
-      }
-      currentTime = millis();
-    }
-  } else {
-    // type was not 0 or 1, error in input, don't do anything
-    return -1;
-  }
-  analogWrite(motor,0);
-  analogWrite(relay[num],0);
-  return true;
 }
 
 // Read out value from sensor
@@ -168,8 +129,8 @@ void serialEvent() {
     digitalWrite(ledPin, HIGH);
     // Get the new byte:
     char inChar = (char)Serial.read();
-    Serial.println(inChar);
-    Serial.println(stringCommand);
+    //Serial.println(inChar);
+    //Serial.println(stringCommand);
     // Ignore everything unless the first byte is the startFlag   
     if (stringCommand[0] == startFlag) {
       stringCommand += inChar;
@@ -185,3 +146,4 @@ void serialEvent() {
     }
   }
 }
+
