@@ -1,0 +1,49 @@
+plants:
+    Cactus:
+        sensors:
+            {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_0}
+        actuators:
+            {relay: relay_0, pump: pump_0}
+    Pineapple:
+        sensors:
+            {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_4}
+        actuators:
+            {relay: relay_1, pump: pump_0}
+    Palm:
+        sensors:
+            {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_2}
+        actuators:
+            {relay: relay_2, pump: pump_0}
+    Grape:
+        sensors:
+            {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_3}
+        actuators:
+            {relay: relay_3, pump: pump_0}
+
+io:
+    flow_sensor:
+        {type: digital, state: read, pin: 10}
+    light_sensor:
+        {type: analog, state: read, pin: 7}
+    temperature_sensor:
+        {type: i2c, state: read, address: 0x54}
+    moist_sensor_0:
+        {type: analog, state: read, pin: 6}
+    moist_sensor_1:
+        {type: analog, state: read, pin: 8}
+    moist_sensor_2:
+        {type: analog, state: read, pin: 9}
+    moist_sensor_3:
+        {type: analog, state: read, pin: 2}
+    relay_0:
+        {type: digital, state: write, pin: 3}
+    relay_1:
+        {type: digital, state: write, pin: 8}
+    relay_2:
+        {type: digital, state: write, pin: 4}
+    relay_3:
+        {type: digital, state: write, pin: 5}
+
+pump:
+    pump_0:
+        {type: analog, state: write, pin: 4, tachometer: flow_sensor}
