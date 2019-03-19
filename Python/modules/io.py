@@ -41,6 +41,7 @@ class IO:
 
     # Keep track of all IO devices
     instances = []
+    sb_default_timeout = 1
 
     def __init__(self, name, spec, sb):
         '''IO Constructor'''
@@ -97,6 +98,9 @@ class IO:
     def get_value(self):
         '''Get value from IO device'''
 
+        # Set timeout for response on serial bus.
+        self._serial_bus.timeout = IO.sb_default_timeout
+
         # Warn about faulty usage
         if self.get_type_io() is not TypeIO.READ:
             s = '{}, tried to get_value, but is not configured as {}'
@@ -118,6 +122,9 @@ class IO:
 
     def set_value(self, value):
         '''Set value for IO device'''
+
+        # Set timeout for response on serial bus.
+        self._serial_bus.timeout = IO.sb_default_timeout
 
         # Warn about faulty usage
         if self.get_type_io() is not TypeIO.WRITE:
@@ -180,6 +187,10 @@ class Pump(IO):
         Supported modes are 'time' and 'centiliter', which
         runs the pump for specified time or amount.
         '''
+
+        # Set timeout for response on serial bus.
+        self._serial_bus.timeout = Pump.sb_default_timeout
+
         if not isinstance(mode, PumpMode):
             s = '{}; Unknown pump mode: {}'
             return 1, s.format(self.get_name(), mode)
@@ -204,23 +215,35 @@ class Pump(IO):
 def send_serial_command(sb, command):
     '''Send serial command and return response.
     Available commands and syntax:
-        Assign analog/digital input/output pin [number]\n
-        Read analog/digital pin [number]\n
-        Write analog/digital pin [number]\n
+        Pump analog_[pin] Relay digital_[pin] [mode]_[value]
+        Read digital_[pin]\n
+        Read analog_[pin]\n
+        Read i2c_[address]_[register]\n
+        Write digital_[pin]\n
+        Write analog_[pin]\n
+
+        Assign analog/digital_input/output_[pin]\n???
     '''
 
+    # Skip last character since every command ends with a newline character.
     logging.debug('Sending cmd on serial bus: {}'.format(command[:-1]))
+
+    if not sb.is_open:
+        sb.open()
+    # Encode to bytestring
+    sb.write(command.encode())
+    # Decode from bytestring
+    response = sb.readline().decode()
+    logging.debug('Receiving cmd on serial bus: {}'.format(response))
+    # Close serial bus after response
+    sb.close()
+
+    # Fake receiving command
     status, message = recieve_serial_command(command)
 
     s = 'Recieved status: {} with message: {}'
     logging.debug(s.format(status, message))
     return status, message
-    '''
-    if not sb.is_open():
-        sb.open()
-    sb.write(command)
-    return sb.readline()
-    '''
 
 
 def recieve_serial_command(command):
@@ -256,9 +279,9 @@ def recieve_serial_command(command):
 
 
 def init_serial_bus():
-    '''Setup serial bus.'''
-
-    # https://pyserial.readthedocs.io/en/latest/shortintro.html
+    '''Setup serial bus.
+    Doc: https://pyserial.readthedocs.io/en/latest/shortintro.html
+    '''
 
     sb = serial.Serial(
         port='/dev/ttyUSB0',
@@ -277,12 +300,12 @@ def test_serial_bus(sb):
        Send init command and get confirmation as response.
     '''
 
-    if not sb.is_open():
+    if not sb.is_open:
         sb.open()
+    sb.write('init\n'.encode())
 
-    sb.write('init')
-    response = sb.readline()
+    response = sb.readline().decode()
     if response is not 'init complete':
-        logging.warning('Failed to get response from unit')
+        logging.warning('Failed to get init response from unit')
     sb.close()
     return

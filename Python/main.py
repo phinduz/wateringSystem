@@ -1,12 +1,13 @@
 #!/usr/bin/python3
 
 import logging
-import serial
 from modules.io import IO
 from modules.io import Pump
 from modules.io import State
 from modules.io import PumpMode
+from modules.io import init_serial_bus
 from modules.plant import Plant
+
 
 
 import yaml
@@ -20,8 +21,8 @@ def main():
     config_file = 'plant_configuration.yaml'
     configuration = load_configuration(config_file)
 
-    # Dummy serial bus
-    sb = 'Serial bus object'
+    # Init serial bus
+    sb = init_serial_bus()
     plants = setup_configuration(configuration, sb)
 
     plants.get('Grape').read_moist_sensor()
