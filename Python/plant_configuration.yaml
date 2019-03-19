@@ -3,22 +3,22 @@ plants:
         sensors:
             {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_0, humidity: humidity_sensor}
         actuators:
-            {relay: relay_0, pump: pump_0}
+            {pump: pump_0}
     Pineapple:
         sensors:
             {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_4, humidity: humidity_sensor}
         actuators:
-            {relay: relay_6, pump: pump_0}
+            {pump: pump_1}
     Palm:
         sensors:
             {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_2, humidity: humidity_sensor}
         actuators:
-            {relay: relay_2, pump: pump_0}
+            {pump: pump_2}
     Grape:
         sensors:
             {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_3, humidity: humidity_sensor}
         actuators:
-            {relay: relay_3, pump: pump_0}
+            {pump: pump_3}
 
 io:
     flow_sensor:
@@ -48,4 +48,10 @@ io:
 
 pump:
     pump_0:
-        {class: analog, type: write, pin: 4, tachometer: flow_sensor}
+        {class: analog, type: write, pin: 4, tachometer: flow_sensor, relay: relay_0}
+    pump_1:
+        {class: analog, type: write, pin: 4, tachometer: flow_sensor, relay: relay_1}
+    pump_2:
+        {class: analog, type: write, pin: 4, tachometer: flow_sensor, relay: relay_2}
+    pump_3:
+        {class: analog, type: write, pin: 4, tachometer: flow_sensor, relay: relay_3}

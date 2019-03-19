@@ -34,9 +34,6 @@ class Plant:
         for actuator_type, actuator_name in spec.get(
                 'actuators').items():
             if actuator_name in io_object_dict.keys():
-                if actuator_type == 'relay':
-                    self._data.update({'relay':
-                                      io_object_dict.get(actuator_name)})
                 if actuator_type == 'pump':
                     self._data.update({'pump':
                                       io_object_dict.get(actuator_name)})
@@ -58,8 +55,6 @@ class Plant:
         s = ''
         if self._get_pump():
             s += self._get_pump().get_name()
-        if self._get_relay():
-            s += ', ' + self._get_relay().get_name()
         if self._get_moist_sensor():
             s += ', ' + self._get_moist_sensor().get_name()
         if self._get_temperature_sensor():
@@ -89,10 +84,6 @@ class Plant:
     def _get_light_sensor(self):
         '''Return light sensor object'''
         return self._data.get('light_sensor')
-
-    def _get_relay(self):
-        '''Return relay object'''
-        return self._data.get('relay')
 
     def _get_pump(self):
         '''Return pump object'''
@@ -127,6 +118,18 @@ class Plant:
     def read_humidity_sensor(self):
         '''Read value from humidity sensor.'''
         return self._read_sensor_value(self._get_humidity_sensor())
+
+    def run_pump(self, mode, value):
+        '''Run pump.'''
+
+        pump = self._get_pump()
+        status, message = pump.run_pump(mode, value)
+        if status:
+            s = '{}; Pump: {} failed to run, returned message: {}'
+            logging.warning(s.format(self.get_name(), pump.get_name(),
+                            message))
+            return None
+        return status
 
     def _set_relay(self, value):
         '''Set relay on or off.'''

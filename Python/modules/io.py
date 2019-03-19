@@ -18,7 +18,7 @@ class TypeIO(Enum):
         return str(self.value)
     READ = 'read'
     WRITE = 'write'
-    UNINITIALIZED_STATE = 'uninitialized_type'
+    UNINITIALIZED_TYPE = 'uninitialized_type'
 
 
 class State(Enum):
@@ -27,6 +27,13 @@ class State(Enum):
     OFF = 0
     ON = 1
     UNINITIALIZED = 'uninitialized'
+
+
+class PumpMode(Enum):
+    def __str__(self):
+        return str(self.value)
+    TIME = 'time'
+    CENTILITER = 'centiliter'
 
 
 class IO:
@@ -61,7 +68,7 @@ class IO:
             if key == 'register':
                 self._data.update({'register_io': value})
 
-        s = 'Added IO: {} on {}:{} as {}'
+        s = 'Added IO: {} on {}_{} as {}'
         logging.debug(s.format(self.get_name(), self._get_class_io(),
                                self.get_address_io(), self.get_type_io()))
         # Add to list of class instances
@@ -95,9 +102,9 @@ class IO:
             s = '{}, tried to get_value, but is not configured as {}'
             logging.warning(s.format(self.get_name(), TypeIO.READ))
             return
-        pin = self.get_address_io()
+        address = self.get_address_io()
         class_io = self._get_class_io()
-        serial_command = 'Read {0}_{1}\n'.format(class_io, pin)
+        serial_command = 'Read {0}_{1}\n'.format(class_io, address)
         if class_io is ClassIO.I2C:
             serial_command = '{}_{}\n'.format(serial_command[:-1],
                                               self._get_register_io())
@@ -118,9 +125,9 @@ class IO:
             logging.warning(s.format(self.get_name(), TypeIO.WRITE))
             return
 
-        pin = self.get_address_io()
+        address = self.get_address_io()
         class_io = self._get_class_io()
-        serial_command = 'Write {0}_{1} {2}\n'.format(class_io, pin, value)
+        serial_command = 'Write {0}_{1} {2}\n'.format(class_io, address, value)
         status, message = send_serial_command(self._serial_bus, serial_command)
         if status:
             s = '{}; Cmd: {}, returned status: {}, with message: {}'
@@ -146,9 +153,52 @@ class Pump(IO):
                 if value in io_object_dict:
                     self._data.update({'tachometer':
                                       io_object_dict.get(value)})
+                    s = 'Added IO: {} on {} as {}'
+                    logging.debug(s.format(value, self.get_name(), key))
+            if key == 'relay':
+                if value in io_object_dict:
+                    self._data.update({'relay': io_object_dict.get(value)})
+                    s = 'Added IO: {} on {} as {}'
+                    logging.debug(s.format(value, self.get_name(), key))
         # Add to list of class instances
-
         Pump.instances.append(self)
+
+    # Redefine inherited method that will not be used.
+    def get_value(*args, **kwargs):
+        pass
+
+    # Redefine inherited method that will not be used.
+    def set_value(*args, **kwargs):
+        pass
+
+    def _get_relay(self):
+        '''Return relay object'''
+        return self._data.get('relay')
+
+    def run_pump(self, mode, value):
+        '''Run pump with specified mode.
+        Supported modes are 'time' and 'centiliter', which
+        runs the pump for specified time or amount.
+        '''
+        if not isinstance(mode, PumpMode):
+            s = '{}; Unknown pump mode: {}'
+            return 1, s.format(self.get_name(), mode)
+
+        address = self.get_address_io()
+        class_io = self._get_class_io()
+        relay = self._get_relay()
+        relay_address = relay.get_address_io()
+        relay_class_io = relay._get_class_io()
+
+        s = 'Pump {0}_{1} Relay {2}_{3} {4}_{5}\n'
+        serial_command = s.format(class_io, address, relay_class_io,
+                                  relay_address, mode, value)
+        status, message = send_serial_command(self._serial_bus, serial_command)
+        if status:
+            s = '{}; Cmd: {}, returned status: {}, with message: {}'
+            logging.debug(s.format(self.get_name(), serial_command[:-1],
+                                   status, message))
+        return status, message
 
 
 def send_serial_command(sb, command):
@@ -193,6 +243,9 @@ def recieve_serial_command(command):
             value = number*4
             status = 0
     if command[:5] == 'Write':
+        status = 0
+        value = None
+    if command[:4] == 'Pump':
         status = 0
         value = None
 

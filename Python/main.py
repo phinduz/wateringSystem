@@ -5,7 +5,9 @@ import serial
 from modules.io import IO
 from modules.io import Pump
 from modules.io import State
+from modules.io import PumpMode
 from modules.plant import Plant
+
 
 import yaml
 
@@ -25,9 +27,10 @@ def main():
     plants.get('Grape').read_moist_sensor()
     plants.get('Grape').read_light_sensor()
     plants.get('Grape').read_temperature_sensor()
-    plants.get('Grape')._set_relay(State.ON)
-    plants.get('Pineapple')._set_relay(State.ON)
     plants.get('Cactus').read_humidity_sensor()
+    plants.get('Grape').run_pump(PumpMode.TIME, 10)
+    plants.get('Palm').run_pump(PumpMode.CENTILITER, 42)
+
 
 def setup_configuration(cfg, sb):
     '''Setup IO and plants according to configuration file'''
