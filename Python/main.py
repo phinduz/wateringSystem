@@ -16,7 +16,7 @@ import yaml
 def main():
 
     logging.basicConfig(format='%(levelname)s %(asctime)s %(message)s',
-                        level=logging.DEBUG)
+                        level=logging.INFO)
 
     config_file = 'plant_configuration.yaml'
     configuration = load_configuration(config_file)

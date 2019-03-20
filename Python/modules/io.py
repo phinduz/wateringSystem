@@ -2,6 +2,7 @@ import logging
 import serial
 from enum import Enum
 import random
+import time
 
 
 class ClassIO(Enum):
@@ -95,11 +96,15 @@ class IO:
         '''Return register for i2c io'''
         return self._data.get('register_io')
 
+    def _set_serial_bus_timeout(self, timeout):
+        '''Set timeout on response from serial bus.'''
+        self._serial_bus.timeout = timeout
+
     def get_value(self):
         '''Get value from IO device'''
 
         # Set timeout for response on serial bus.
-        self._serial_bus.timeout = IO.sb_default_timeout
+        self._set_serial_bus_timeout(IO.sb_default_timeout)
 
         # Warn about faulty usage
         if self.get_type_io() is not TypeIO.READ:
@@ -108,15 +113,15 @@ class IO:
             return
         address = self.get_address_io()
         class_io = self._get_class_io()
-        serial_command = 'Read {0}_{1}\n'.format(class_io, address)
+        serial_command = 'Read {0}_{1}'.format(class_io, address)
         if class_io is ClassIO.I2C:
-            serial_command = '{}_{}\n'.format(serial_command[:-1],
-                                              self._get_register_io())
+            serial_command = '{}_{}'.format(serial_command,
+                                            self._get_register_io())
 
         status, message = send_serial_command(self._serial_bus, serial_command)
         if status:
             s = '{}; Cmd: {}, returned status: {}, with message: {}'
-            logging.debug(s.format(self.get_name(), serial_command[:-1],
+            logging.debug(s.format(self.get_name(), serial_command,
                                    status, message))
         return status, message
 
@@ -124,7 +129,7 @@ class IO:
         '''Set value for IO device'''
 
         # Set timeout for response on serial bus.
-        self._serial_bus.timeout = IO.sb_default_timeout
+        self._set_serial_bus_timeout(IO.sb_default_timeout)
 
         # Warn about faulty usage
         if self.get_type_io() is not TypeIO.WRITE:
@@ -134,11 +139,11 @@ class IO:
 
         address = self.get_address_io()
         class_io = self._get_class_io()
-        serial_command = 'Write {0}_{1} {2}\n'.format(class_io, address, value)
+        serial_command = 'Write {0}_{1} {2}'.format(class_io, address, value)
         status, message = send_serial_command(self._serial_bus, serial_command)
         if status:
             s = '{}; Cmd: {}, returned status: {}, with message: {}'
-            logging.debug(s.format(self.get_name(), serial_command[:-1],
+            logging.debug(s.format(self.get_name(), serial_command,
                                    status, message))
         return status, message
 
@@ -189,7 +194,7 @@ class Pump(IO):
         '''
 
         # Set timeout for response on serial bus.
-        self._serial_bus.timeout = Pump.sb_default_timeout
+        self._set_serial_bus_timeout(Pump.sb_default_timeout)
 
         if not isinstance(mode, PumpMode):
             s = '{}; Unknown pump mode: {}'
@@ -201,13 +206,13 @@ class Pump(IO):
         relay_address = relay.get_address_io()
         relay_class_io = relay._get_class_io()
 
-        s = 'Pump {0}_{1} Relay {2}_{3} {4}_{5}\n'
+        s = 'Pump {0}_{1} Relay {2}_{3} {4}_{5}'
         serial_command = s.format(class_io, address, relay_class_io,
                                   relay_address, mode, value)
         status, message = send_serial_command(self._serial_bus, serial_command)
         if status:
             s = '{}; Cmd: {}, returned status: {}, with message: {}'
-            logging.debug(s.format(self.get_name(), serial_command[:-1],
+            logging.debug(s.format(self.get_name(), serial_command,
                                    status, message))
         return status, message
 
@@ -226,20 +231,35 @@ def send_serial_command(sb, command):
     '''
 
     # Skip last character since every command ends with a newline character.
-    logging.debug('Sending cmd on serial bus: {}'.format(command[:-1]))
+    logging.info('Sending cmd on serial bus: {}'.format(command))
 
     if not sb.is_open:
         sb.open()
+
+    # Flush buffer on serial bus.
+    sb.flushInput()
+    time.sleep(0.1)
+
     # Encode to bytestring
-    sb.write(command.encode())
+    sb.write('{}\n'.format(command).encode())
     # Decode from bytestring
-    response = sb.readline().decode()
-    logging.debug('Receiving cmd on serial bus: {}'.format(response))
+    response = sb.readline()
+
+    status = 1
+    message = ''
+    try:
+        message = response[:-2].decode()
+        status = 0
+    except:
+        s = 'Failed to decode response on serial bus: {}'
+        logging.warning(s.format(response))
+    logging.info('Receiving cmd on serial bus: {}'.format(message))
     # Close serial bus after response
     sb.close()
 
     # Fake receiving command
-    status, message = recieve_serial_command(command)
+    # status, message = recieve_serial_command(command)
+    message = response
 
     s = 'Recieved status: {} with message: {}'
     logging.debug(s.format(status, message))
@@ -285,8 +305,8 @@ def init_serial_bus():
 
     sb = serial.Serial(
         port='/dev/ttyUSB0',
-        baudrate=9600,
-        parity=serial.PARITY_NONE,
+        baudrate=57600,
+        parity=serial.PARITY_EVEN,
         stopbits=serial.STOPBITS_ONE,
         bytesize=serial.EIGHTBITS,
         timeout=1)
@@ -300,12 +320,8 @@ def test_serial_bus(sb):
        Send init command and get confirmation as response.
     '''
 
-    if not sb.is_open:
-        sb.open()
-    sb.write('init\n'.encode())
-
-    response = sb.readline().decode()
-    if response is not 'init complete':
-        logging.warning('Failed to get init response from unit')
-    sb.close()
+    # Warm up serial bus
+    command = 'init'
+    for _ in range(5):
+        send_serial_command(sb, command)
     return
