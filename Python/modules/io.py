@@ -253,13 +253,8 @@ def send_serial_command(sb, command):
     except:
         s = 'Failed to decode response on serial bus: {}'
         logging.warning(s.format(response))
-    logging.info('Receiving cmd on serial bus: {}'.format(message))
-    # Close serial bus after response
-    sb.close()
 
-    # Fake receiving command
-    # status, message = recieve_serial_command(command)
-    message = response
+    logging.info('Receiving cmd on serial bus: {}'.format(message))
 
     s = 'Recieved status: {} with message: {}'
     logging.debug(s.format(status, message))
