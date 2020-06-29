@@ -37,6 +37,13 @@ class PumpMode(Enum):
     CENTILITER = 'centiliter'
 
 
+class SB:
+    def __str__(self):
+        return str(self.value)
+    def __init__(self, sb):
+        self._serial_bus = sb
+
+
 class IO:
     '''Basic class for all IO devices.'''
 
@@ -233,6 +240,11 @@ def send_serial_command(sb, command):
     # Skip last character since every command ends with a newline character.
     logging.info('Sending cmd on serial bus: {}'.format(command))
 
+    if sb._serial_bus.get('simulated'):
+        message = 36
+        status = 2
+        return status, message
+
     if not sb.is_open:
         sb.open()
 
@@ -293,19 +305,24 @@ def recieve_serial_command(command):
         return status, message
 
 
-def init_serial_bus():
+def init_serial_bus(simulated=False):
     '''Setup serial bus.
     Doc: https://pyserial.readthedocs.io/en/latest/shortintro.html
     '''
 
-    sb = serial.Serial(
-        port='/dev/ttyUSB0',
-        baudrate=57600,
-        parity=serial.PARITY_EVEN,
-        stopbits=serial.STOPBITS_ONE,
-        bytesize=serial.EIGHTBITS,
-        timeout=1)
+    serial_options = dict(port='/dev/ttyUSB0',
+                          baudrate=57600,
+                          parity=serial.PARITY_EVEN,
+                          stopbits=serial.STOPBITS_ONE,
+                          bytesize=serial.EIGHTBITS,
+                          timeout=1)
+    if simulated:
+        serial_options.update({'simulated': True})
+        return SB(serial_options)
 
+    sb = serial.Serial(**serial_options)
+
+    logging.debug('Init serial bus with options: {}'.format(sb))
     test_serial_bus(sb)
     return sb
 
