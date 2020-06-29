@@ -7,7 +7,6 @@ import yaml
 
 from modules.io import IO
 from modules.io import Pump
-from modules.io import State
 from modules.io import PumpMode
 from modules.io import init_serial_bus
 from modules.plant import Plant
@@ -49,6 +48,9 @@ def main():
     plants.get('Grape').read_temperature_sensor()
     plants.get('Cactus').read_humidity_sensor()
     plants.get('Grape').run_pump(PumpMode.TIME, 10)
+    plants.get('Palm').run_pump(PumpMode.CENTILITER, 42)
+
+    IO.get_all_values(sb)
     plants.get('Palm').run_pump(PumpMode.CENTILITER, 42)
 
 

@@ -1,15 +1,16 @@
+import json
 import logging
-import serial
-from enum import Enum
 import random
+import serial
 import time
+from enum import Enum
 
 
 class ClassIO(Enum):
     def __str__(self):
         return str(self.value)
-    ANALOG = 'analog'
-    DIGITAL = 'digital'
+    ANALOG = 'a'
+    DIGITAL = 'd'
     I2C = 'i2c'
     UNINITIALIZED_CLASS = 'uninitialized_class'
 
@@ -20,6 +21,23 @@ class TypeIO(Enum):
     READ = 'read'
     WRITE = 'write'
     UNINITIALIZED_TYPE = 'uninitialized_type'
+
+
+class CmdIO(Enum):
+    def __str__(self):
+        return str(self.value)
+    COMMAND = 'cmd'
+    ARGUMENTS = 'args'
+    VALUE = 'value'
+    AMOUNT = 'amt'
+    RELAY = 'relay'
+    TACHOMETER = 'tacho'
+    PULSES = 'ps'
+    TIME = 'time'
+    READ = 'read'
+    WRITE = 'write'
+    PUMP = 'pump'
+    INIT = 'init'
 
 
 class State(Enum):
@@ -40,6 +58,7 @@ class PumpMode(Enum):
 class SB:
     def __str__(self):
         return str(self.value)
+
     def __init__(self, sb):
         self._serial_bus = sb
 
@@ -76,10 +95,8 @@ class IO:
                 self._data.update({'address_io': value})
             if key == 'register':
                 self._data.update({'register_io': value})
-
-        s = 'Added IO: {} on {}_{} as {}'
-        logging.debug(s.format(self.get_name(), self._get_class_io(),
-                               self.get_address_io(), self.get_type_io()))
+            if key == 'pulse_per_cl':
+                self._data.update({'pulse_per_cl': value})
         # Add to list of class instances
         IO.instances.append(self)
 
@@ -120,17 +137,33 @@ class IO:
             return
         address = self.get_address_io()
         class_io = self._get_class_io()
-        serial_command = 'Read {0}_{1}'.format(class_io, address)
+        serial_command = {str(CmdIO.COMMAND): str(CmdIO.READ)}
         if class_io is ClassIO.I2C:
-            serial_command = '{}_{}'.format(serial_command,
-                                            self._get_register_io())
+            serial_command.update({str(CmdIO.ARGUMENTS): [{str(class_io): [address, self._get_register_io()]}]})
+        else:
+            serial_command.update({str(CmdIO.ARGUMENTS): [{str(class_io): address}]})
+        data = send_serial_command(self._serial_bus, serial_command)
+        # Data is always put in a list,
+        # but when requesting only one value it is always the first.
+        value = data[str(class_io)][0][address]
+        status = data.get('status')
+        return status, value
 
-        status, message = send_serial_command(self._serial_bus, serial_command)
-        if status:
-            s = '{}; Cmd: {}, returned status: {}, with message: {}'
-            logging.debug(s.format(self.get_name(), serial_command,
-                                   status, message))
-        return status, message
+    @staticmethod
+    def get_all_values(serial_bus):
+        sensor_list = []
+        for io in IO.instances:
+            if io.get_type_io() is TypeIO.READ:
+                if io._get_class_io() is ClassIO.I2C:
+                    sensor_list.append({str(io._get_class_io()):
+                                        [io.get_address_io(),
+                                         io._get_register_io()]})
+                else:
+                    sensor_list.append({str(io._get_class_io()):
+                                       io.get_address_io()})
+        serial_command = {str(CmdIO.COMMAND): str(CmdIO.READ)}
+        serial_command.update({str(CmdIO.ARGUMENTS): sensor_list})
+        return send_serial_command(serial_bus, serial_command)
 
     def set_value(self, value):
         '''Set value for IO device'''
@@ -146,13 +179,12 @@ class IO:
 
         address = self.get_address_io()
         class_io = self._get_class_io()
-        serial_command = 'Write {0}_{1} {2}'.format(class_io, address, value)
-        status, message = send_serial_command(self._serial_bus, serial_command)
-        if status:
-            s = '{}; Cmd: {}, returned status: {}, with message: {}'
-            logging.debug(s.format(self.get_name(), serial_command,
-                                   status, message))
-        return status, message
+        serial_command = {str(CmdIO.COMMAND): str(CmdIO.WRITE)}
+        if class_io is ClassIO.I2C:
+            serial_command.update({str(CmdIO.ARGUMENTS): [{str(class_io): [address, self._get_register_io()], str(CmdIO.VALUE): value}]})
+        else:
+            serial_command.update({str(CmdIO.ARGUMENTS): [{str(class_io): address, str(CmdIO.VALUE): value}]})
+        return send_serial_command(self._serial_bus, serial_command)
 
 
 class Pump(IO):
@@ -172,13 +204,9 @@ class Pump(IO):
                 if value in io_object_dict:
                     self._data.update({'tachometer':
                                       io_object_dict.get(value)})
-                    s = 'Added IO: {} on {} as {}'
-                    logging.debug(s.format(value, self.get_name(), key))
             if key == 'relay':
                 if value in io_object_dict:
                     self._data.update({'relay': io_object_dict.get(value)})
-                    s = 'Added IO: {} on {} as {}'
-                    logging.debug(s.format(value, self.get_name(), key))
         # Add to list of class instances
         Pump.instances.append(self)
 
@@ -193,6 +221,10 @@ class Pump(IO):
     def _get_relay(self):
         '''Return relay object'''
         return self._data.get('relay')
+
+    def _get_tachometer(self):
+        '''Return tachometer object'''
+        return self._data.get('tachometer')
 
     def run_pump(self, mode, value):
         '''Run pump with specified mode.
@@ -212,97 +244,104 @@ class Pump(IO):
         relay = self._get_relay()
         relay_address = relay.get_address_io()
         relay_class_io = relay._get_class_io()
+        tachometer = self._get_tachometer()
+        tachometer_address = tachometer.get_address_io()
+        tachometer_class_io = tachometer._get_class_io()
+        pulse_per_cl = tachometer._data.get('pulse_per_cl')
 
-        s = 'Pump {0}_{1} Relay {2}_{3} {4}_{5}'
-        serial_command = s.format(class_io, address, relay_class_io,
-                                  relay_address, mode, value)
-        status, message = send_serial_command(self._serial_bus, serial_command)
-        if status:
-            s = '{}; Cmd: {}, returned status: {}, with message: {}'
-            logging.debug(s.format(self.get_name(), serial_command,
-                                   status, message))
+        serial_command = {str(CmdIO.COMMAND): str(CmdIO.PUMP)}
+        serial_command.update({str(CmdIO.PUMP): {str(class_io): address},
+                               str(CmdIO.TACHOMETER): {str(tachometer_class_io): tachometer_address},
+                               str(CmdIO.RELAY): {str(relay_class_io): relay_address}})
+        if mode is PumpMode.TIME:
+            serial_command.update({str(CmdIO.AMOUNT): {str(CmdIO.TIME): value}})
+        elif mode is PumpMode.CENTILITER:
+            serial_command.update({str(CmdIO.AMOUNT): {str(CmdIO.PULSES): value*pulse_per_cl}})
+        data = send_serial_command(self._serial_bus, serial_command)
+        status = data.get('status')
+        pulses = data.get(str(CmdIO.PULSES))
+        message = '{} pulses'.format(pulses)
         return status, message
 
 
 def send_serial_command(sb, command):
     '''Send serial command and return response.
-    Available commands and syntax:
-        Pump analog_[pin] Relay digital_[pin] [mode]_[value]
-        Read digital_[pin]\n
-        Read analog_[pin]\n
-        Read i2c_[address]_[register]\n
-        Write digital_[pin]\n
-        Write analog_[pin]\n
-
-        Assign analog/digital_input/output_[pin]\n???
     '''
 
-    # Skip last character since every command ends with a newline character.
-    logging.info('Sending cmd on serial bus: {}'.format(command))
+    serial_command = json.dumps(command)
+    logging.debug('serial bus sent: {}'.format(command))
 
     if sb._serial_bus.get('simulated'):
-        message = 36
-        status = 2
-        return status, message
+        data = recieve_serial_command(serial_command)
+    else:
+        if not sb.is_open:
+            sb.open()
 
-    if not sb.is_open:
-        sb.open()
+        # Flush buffer on serial bus.
+        sb.flushInput()
+        time.sleep(0.1)
 
-    # Flush buffer on serial bus.
-    sb.flushInput()
-    time.sleep(0.1)
+        # Encode to bytestring
+        sb.write(command.encode())
+        # Decode from bytestring
+        response = sb.readline()
 
-    # Encode to bytestring
-    sb.write('{}\n'.format(command).encode())
-    # Decode from bytestring
-    response = sb.readline()
-
-    status = 1
-    message = ''
-    try:
-        message = response[:-2].decode()
-        status = 0
-    except:
-        s = 'Failed to decode response on serial bus: {}'
-        logging.warning(s.format(response))
-
-    logging.info('Receiving cmd on serial bus: {}'.format(message))
-
-    s = 'Recieved status: {} with message: {}'
-    logging.debug(s.format(status, message))
-    return status, message
+        try:
+            serial_data = response.decode()
+            data = json.loads(serial_data)
+            data.update({'status': 0})
+        except:
+            s = 'Failed to decode response on serial bus: {}'
+            logging.warning(s.format(response))
+    logging.debug('serial bus received: {}'.format(data))
+    return data
 
 
-def recieve_serial_command(command):
+def recieve_serial_command(serial_data):
     '''Emulates a simple response from serial command.'''
 
-    message = 'Someting went wrong'
-    status = 1
-    if command[:4] == 'Read':
-        number = random.randint(0, 255)
-        if command[5:11] == 'analog':
-            value = number
-            status = 0
-        elif command[5:12] == 'digital':
-            if number > 127:
-                value = 1
-            else:
-                value = 0
-            status = 0
-        elif command[5:8] == 'i2c':
-            value = number*4
-            status = 0
-    if command[:5] == 'Write':
-        status = 0
-        value = None
-    if command[:4] == 'Pump':
-        status = 0
-        value = None
+    serial_command = json.loads(serial_data)
+    command = serial_command.get(str(CmdIO.COMMAND))
+    arguments = serial_command.get(str(CmdIO.ARGUMENTS))
 
-    if status == 0:
-        return status, value
-    else:
-        return status, message
+    data = dict()
+    number = random.randint(0, 255)
+    if command == str(CmdIO.READ):
+        for argument in arguments:
+            if str(ClassIO.ANALOG) in argument:
+                io_class_str = str(ClassIO.ANALOG)
+                value = number
+            elif str(ClassIO.DIGITAL) in argument:
+                io_class_str = str(ClassIO.DIGITAL)
+                if number > 127:
+                    value = 1
+                else:
+                    value = 0
+            elif str(ClassIO.I2C) in argument:
+                io_class_str = str(ClassIO.I2C)
+                value = number*4
+            else:
+                s = 'Unknown argument: {} to: {} command.'
+                logging.warning(s.format(argument, command))
+                return {'status': 3}
+            address = argument.get(io_class_str)
+            if str(ClassIO.I2C) in argument:
+                if io_class_str in data:
+                    data[io_class_str].append({address[0]: {address[1]: value}})
+                else:
+                    data.update({io_class_str: [{address[0]: {address[1]: value}}]})
+            else:
+                if io_class_str in data:
+                    data[io_class_str].append({address: value})
+                    pass
+                else:
+                    data.update({io_class_str: [{address: value}]})
+    if command == str(CmdIO.WRITE):
+        data.update({str(CmdIO.VALUE): 0})
+    if command == str(CmdIO.PUMP):
+        data.update({str(CmdIO.PULSES): number*23})
+    data.update({'status': 0})
+    return data
 
 
 def init_serial_bus(simulated=False):
@@ -333,7 +372,7 @@ def test_serial_bus(sb):
     '''
 
     # Warm up serial bus
-    command = 'init'
+    serial_command = {str(CmdIO.COMMAND): str(CmdIO.INIT)}
     for _ in range(5):
-        send_serial_command(sb, command)
+        send_serial_command(sb, serial_command)
     return

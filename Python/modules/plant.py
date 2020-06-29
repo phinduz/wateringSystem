@@ -129,6 +129,8 @@ class Plant:
             logging.warning(s.format(self.get_name(), pump.get_name(),
                             message))
             return None
+        s = 'Plant: {} was watered with: {}'
+        logging.info(s.format(self.get_name(), message))
         return status
 
     def _set_relay(self, value):

@@ -22,7 +22,7 @@ plants:
 
 io:
     flow_sensor:
-        {class: digital, type: read, pin: 10}
+        {class: digital, type: read, pin: 10, pulse_per_cl: 194}
     light_sensor:
         {class: analog, type: read, pin: 7}
     temperature_sensor:
