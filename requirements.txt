@@ -1,0 +1,20 @@
+#
+####### requirements.txt #######
+# https://pip.pypa.io/en/stable/user_guide/#requirements-files
+#
+#
+###### Requirements without Version Specifiers ######
+pyserial
+flake8
+grip
+
+#
+#
+###### Requirements with Version Specifiers ######
+#   See https://www.python.org/dev/peps/pep-0440/#version-specifiers
+#
+#
+###### Additional Requirements without Version Specifiers ######
+#   Same as 1st section, just here to show that you can put things in any order.
+#
+#
