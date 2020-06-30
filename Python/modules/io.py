@@ -26,17 +26,17 @@ class TypeIO(Enum):
 class CmdIO(Enum):
     def __str__(self):
         return str(self.value)
-    COMMAND = 'cmd'
+    COMMAND = 'c'
     ARGUMENTS = 'args'
     VALUE = 'value'
-    AMOUNT = 'amt'
-    RELAY = 'relay'
-    TACHOMETER = 'tacho'
+    AMOUNT = 'a'
+    RELAY = 'r'
+    TACHOMETER = 't'
     PULSES = 'ps'
-    TIME = 'time'
+    TIME = 't'
     READ = 'read'
     WRITE = 'write'
-    PUMP = 'pump'
+    PUMP = 'p'
     INIT = 'init'
 
 
@@ -68,13 +68,14 @@ class IO:
 
     # Keep track of all IO devices
     instances = []
-    sb_default_timeout = 1
+    sb_def_timeout = 4
+    sb_max_timeout = 20
+    max_length_serial_message = 64
 
-    def __init__(self, name, spec, sb):
+    def __init__(self, name, spec):
         '''IO Constructor'''
 
         # Sensor configuration data
-        self._serial_bus = sb
         self._data = dict({'name': name})
         for key, value in spec.items():
             if key == 'type':
@@ -120,15 +121,8 @@ class IO:
         '''Return register for i2c io'''
         return self._data.get('register_io')
 
-    def _set_serial_bus_timeout(self, timeout):
-        '''Set timeout on response from serial bus.'''
-        self._serial_bus.timeout = timeout
-
-    def get_value(self):
+    def get_value(self, serial_bus):
         '''Get value from IO device'''
-
-        # Set timeout for response on serial bus.
-        self._set_serial_bus_timeout(IO.sb_default_timeout)
 
         # Warn about faulty usage
         if self.get_type_io() is not TypeIO.READ:
@@ -142,12 +136,15 @@ class IO:
             serial_command.update({str(CmdIO.ARGUMENTS): [{str(class_io): [address, self._get_register_io()]}]})
         else:
             serial_command.update({str(CmdIO.ARGUMENTS): [{str(class_io): address}]})
-        data = send_serial_command(self._serial_bus, serial_command)
+        data = send_serial_command(serial_bus, serial_command)
         # Data is always put in a list,
         # but when requesting only one value it is always the first.
-        value = data[str(class_io)][0][address]
-        status = data.get('status')
-        return status, value
+        if data.get('status'):
+            value = -1
+        else:
+            value = data[str(CmdIO.ARGUMENTS)][0][str(CmdIO.VALUE)]
+        data['value'] = value
+        return data
 
     @staticmethod
     def get_all_values(serial_bus):
@@ -165,11 +162,8 @@ class IO:
         serial_command.update({str(CmdIO.ARGUMENTS): sensor_list})
         return send_serial_command(serial_bus, serial_command)
 
-    def set_value(self, value):
+    def set_value(self, value, serial_bus):
         '''Set value for IO device'''
-
-        # Set timeout for response on serial bus.
-        self._set_serial_bus_timeout(IO.sb_default_timeout)
 
         # Warn about faulty usage
         if self.get_type_io() is not TypeIO.WRITE:
@@ -184,7 +178,7 @@ class IO:
             serial_command.update({str(CmdIO.ARGUMENTS): [{str(class_io): [address, self._get_register_io()], str(CmdIO.VALUE): value}]})
         else:
             serial_command.update({str(CmdIO.ARGUMENTS): [{str(class_io): address, str(CmdIO.VALUE): value}]})
-        return send_serial_command(self._serial_bus, serial_command)
+        return send_serial_command(serial_bus, serial_command)
 
 
 class Pump(IO):
@@ -193,11 +187,11 @@ class Pump(IO):
     # Keep track of all pump devices
     instances = []
 
-    def __init__(self, name, spec, sb, io_object_dict):
+    def __init__(self, name, spec, io_object_dict):
         '''Doc - __init__ Constructor'''
 
         # Call IO constructor
-        super().__init__(name, spec, sb)
+        super().__init__(name, spec)
         # Pump configuration data
         for key, value in spec.items():
             if key == 'tachometer':
@@ -226,14 +220,11 @@ class Pump(IO):
         '''Return tachometer object'''
         return self._data.get('tachometer')
 
-    def run_pump(self, mode, value):
+    def run_pump(self, mode, value, serial_bus):
         '''Run pump with specified mode.
         Supported modes are 'time' and 'centiliter', which
         runs the pump for specified time or amount.
         '''
-
-        # Set timeout for response on serial bus.
-        self._set_serial_bus_timeout(Pump.sb_default_timeout)
 
         if not isinstance(mode, PumpMode):
             s = '{}; Unknown pump mode: {}'
@@ -245,55 +236,56 @@ class Pump(IO):
         relay_address = relay.get_address_io()
         relay_class_io = relay._get_class_io()
         tachometer = self._get_tachometer()
-        tachometer_address = tachometer.get_address_io()
-        tachometer_class_io = tachometer._get_class_io()
         pulse_per_cl = tachometer._data.get('pulse_per_cl')
 
         serial_command = {str(CmdIO.COMMAND): str(CmdIO.PUMP)}
         serial_command.update({str(CmdIO.PUMP): {str(class_io): address},
-                               str(CmdIO.TACHOMETER): {str(tachometer_class_io): tachometer_address},
                                str(CmdIO.RELAY): {str(relay_class_io): relay_address}})
         if mode is PumpMode.TIME:
             serial_command.update({str(CmdIO.AMOUNT): {str(CmdIO.TIME): value}})
         elif mode is PumpMode.CENTILITER:
             serial_command.update({str(CmdIO.AMOUNT): {str(CmdIO.PULSES): value*pulse_per_cl}})
-        data = send_serial_command(self._serial_bus, serial_command)
-        status = data.get('status')
-        pulses = data.get(str(CmdIO.PULSES))
-        message = '{} pulses'.format(pulses)
-        return status, message
+        serial_bus.timeout = IO.sb_max_timeout
+        data = send_serial_command(serial_bus, serial_command)
+        serial_bus.timeout = IO.sb_def_timeout
+        return data
 
 
 def send_serial_command(sb, command):
     '''Send serial command and return response.
     '''
 
-    serial_command = json.dumps(command)
-    logging.debug('serial bus sent: {}'.format(command))
-
-    if sb._serial_bus.get('simulated'):
-        data = recieve_serial_command(serial_command)
-    else:
+    serial_command = json.dumps(command, separators=(',', ':'))
+    logging.debug('serial bus sent: {}'.format(serial_command))
+    if len(serial_command) > IO.max_length_serial_message:
+        s = 'serial message is too long {}>{} chars: {}.'
+        logging.warning(s.format(len(serial_command),
+                                 IO.max_length_serial_message,
+                                 serial_command))
+    data = dict({'status': 10})
+    try:
+        if sb._serial_bus.get('simulated'):
+            data = recieve_serial_command(serial_command)
+    except:
         if not sb.is_open:
             sb.open()
 
+        # Encode to bytestring
+        sb.write((serial_command + '\n').encode())
+        # Decode from bytestring
         # Flush buffer on serial bus.
         sb.flushInput()
-        time.sleep(0.1)
-
-        # Encode to bytestring
-        sb.write(command.encode())
-        # Decode from bytestring
+        time.sleep(0.01)
         response = sb.readline()
-
         try:
-            serial_data = response.decode()
+            serial_data = response.decode('ascii')
             data = json.loads(serial_data)
             data.update({'status': 0})
         except:
+            data = dict({'status': 14})
             s = 'Failed to decode response on serial bus: {}'
             logging.warning(s.format(response))
-    logging.debug('serial bus received: {}'.format(data))
+    logging.debug('serial bus received: {}'.format(serial_data.strip()))
     return data
 
 
@@ -344,17 +336,17 @@ def recieve_serial_command(serial_data):
     return data
 
 
-def init_serial_bus(simulated=False):
+def init_serial_bus(port='/dev/ttyUSB0', simulated=False):
     '''Setup serial bus.
     Doc: https://pyserial.readthedocs.io/en/latest/shortintro.html
     '''
 
-    serial_options = dict(port='/dev/ttyUSB0',
-                          baudrate=57600,
+    serial_options = dict(port=port,
+                          baudrate=115200,
                           parity=serial.PARITY_EVEN,
                           stopbits=serial.STOPBITS_ONE,
                           bytesize=serial.EIGHTBITS,
-                          timeout=1)
+                          timeout=IO.sb_def_timeout)
     if simulated:
         serial_options.update({'simulated': True})
         return SB(serial_options)

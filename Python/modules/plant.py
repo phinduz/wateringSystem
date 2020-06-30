@@ -1,5 +1,8 @@
+import datetime
 import logging
+import time
 from modules.io import State
+from modules.io import CmdIO
 
 
 class Plant:
@@ -66,7 +69,7 @@ class Plant:
         return s
 
     def get_name(self):
-        '''Return nae of plant'''
+        '''Return name of plant'''
         return self._data.get('name')
 
     def _get_moist_sensor(self):
@@ -89,51 +92,70 @@ class Plant:
         '''Return pump object'''
         return self._data.get('pump')
 
-    def _read_sensor_value(self, sensor):
+    def _read_sensor_value(self, sensor, serial_bus):
         '''Default method for reading sensor values'''
         if sensor:
-            status, value = sensor.get_value()
+            t_start = time.time()
+            data = sensor.get_value(serial_bus)
+            t_stop = time.time()
+            status = data.get('status')
             if status:
                 s = '{}; Sensor: {} failed to read value.'
                 logging.warning(s.format(self.get_name(), sensor.get_name()))
-                return None
-            return value
+            value = data.get(str(CmdIO.VALUE))
+            time_elapsed = round(t_stop - t_start, 2)
+            datetime_string = datetime.datetime.today().strftime('%Y-%m-%dT%H-%M-%S')
+            s = 'Plant: {} was measured with: {}: {}'
+            logging.info(s.format(self.get_name(), sensor.get_name(), value))
+            sensor_data = dict({'plant': self.get_name(), 'time': time_elapsed,
+                                'sensor': sensor.get_name(),
+                                'value': value, 'date': datetime_string})
+            return sensor_data
         else:
             s = 'Tried to read sensor, but {} has no such sensor.'
             logging.warning(s.format(self.get_name()))
             return None
 
-    def read_moist_sensor(self):
+    def read_moist_sensor(self, serial_bus):
         '''Read value from moist sensor.'''
-        return self._read_sensor_value(self._get_moist_sensor())
+        return self._read_sensor_value(self._get_moist_sensor(), serial_bus)
 
-    def read_light_sensor(self):
+    def read_light_sensor(self, serial_bus):
         '''Read value from lght sensor.'''
-        return self._read_sensor_value(self._get_light_sensor())
+        return self._read_sensor_value(self._get_light_sensor(), serial_bus)
 
-    def read_temperature_sensor(self):
+    def read_temperature_sensor(self, serial_bus):
         '''Read value from temperature sensor.'''
-        return self._read_sensor_value(self._get_temperature_sensor())
+        return self._read_sensor_value(self._get_temperature_sensor(), serial_bus)
 
-    def read_humidity_sensor(self):
+    def read_humidity_sensor(self, serial_bus):
         '''Read value from humidity sensor.'''
-        return self._read_sensor_value(self._get_humidity_sensor())
+        return self._read_sensor_value(self._get_humidity_sensor(), serial_bus)
 
-    def run_pump(self, mode, value):
+    def run_pump(self, mode, value, serial_bus):
         '''Run pump.'''
 
         pump = self._get_pump()
-        status, message = pump.run_pump(mode, value)
+        t_start = time.time()
+        data = pump.run_pump(mode, value, serial_bus)
+        t_stop = time.time()
+        status = data.get('status')
         if status:
             s = '{}; Pump: {} failed to run, returned message: {}'
             logging.warning(s.format(self.get_name(), pump.get_name(),
-                            message))
+                            data))
             return None
-        s = 'Plant: {} was watered with: {}'
-        logging.info(s.format(self.get_name(), message))
-        return status
+        s = 'Plant: {} was watered with: {} pulses for {} seconds'
+        pulses = data.get(str(CmdIO.VALUE))
+        time_elapsed = round(t_stop - t_start, 2)
+        logging.info(s.format(self.get_name(), pulses, time_elapsed))
+        datetime_string = datetime.datetime.today().strftime('%Y-%m-%dT%H-%M-%S')
+        water_data = dict({'plant': self.get_name(), 'time': time_elapsed,
+                           'pump': pump.get_name(), 'pulses': pulses,
+                           'date': datetime_string})
+        return water_data
 
-    def _set_relay(self, value):
+    def _set_relay(self, value, serial_bus):
         '''Set relay on or off.'''
 
         # Warn about faulty usage
@@ -142,7 +164,7 @@ class Plant:
             logging.warning(s.format(self.get_name(), value))
             return
         if self._get_relay():
-            status, message = self._get_relay().set_value(value)
+            status, message = self._get_relay().set_value(value, serial_bus)
             return status
         else:
             s = '{}, tried to set_relay but has no relay configured.'

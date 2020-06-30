@@ -1,57 +1,102 @@
 plants:
-    Cactus:
+    Plant_0:
         sensors:
             {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_0, humidity: humidity_sensor}
         actuators:
             {pump: pump_0}
-    Pineapple:
+    Plant_1:
         sensors:
-            {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_4, humidity: humidity_sensor}
+            {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_1, humidity: humidity_sensor}
         actuators:
             {pump: pump_1}
-    Palm:
+    Plant_2:
         sensors:
             {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_2, humidity: humidity_sensor}
         actuators:
             {pump: pump_2}
-    Grape:
+    Plant_3:
         sensors:
             {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_3, humidity: humidity_sensor}
         actuators:
             {pump: pump_3}
+    Plant_4:
+        sensors:
+            {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_4, humidity: humidity_sensor}
+        actuators:
+            {pump: pump_4}
+    Plant_5:
+        sensors:
+            {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_5, humidity: humidity_sensor}
+        actuators:
+            {pump: pump_5}
+    Plant_6:
+        sensors:
+            {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_6, humidity: humidity_sensor}
+        actuators:
+            {pump: pump_6}
+    Plant_7:
+        sensors:
+            {light: light_sensor, temperature: temperature_sensor, moist: moist_sensor_7, humidity: humidity_sensor}
+        actuators:
+            {pump: pump_7}
+
 
 io:
     flow_sensor:
-        {class: digital, type: read, pin: 10, pulse_per_cl: 194}
+        {pulse_per_cl: 49}
     light_sensor:
-        {class: analog, type: read, pin: 7}
+        {class: analog, type: read, pin: 0}
     temperature_sensor:
         {class: i2c, type: read, address: 0x54, register: 0x02}
     humidity_sensor:
         {class: i2c, type: read, address: 0x54, register: 0x07}
     moist_sensor_0:
-        {class: analog, type: read, pin: 6}
+        {class: analog, type: read, pin: 0}
     moist_sensor_1:
-        {class: analog, type: read, pin: 8}
+        {class: analog, type: read, pin: 1}
     moist_sensor_2:
-        {class: analog, type: read, pin: 9}
-    moist_sensor_3:
         {class: analog, type: read, pin: 2}
+    moist_sensor_3:
+        {class: analog, type: read, pin: 3}
+    moist_sensor_4:
+        {class: analog, type: read, pin: 4}
+    moist_sensor_5:
+        {class: analog, type: read, pin: 5}
+    moist_sensor_6:
+        {class: analog, type: read, pin: 6}
+    moist_sensor_7:
+        {class: analog, type: read, pin: 7}
     relay_0:
-        {class: digital, type: write, pin: 3}
-    relay_1:
-        {class: digital, type: write, pin: 8}
-    relay_2:
-        {class: digital, type: write, pin: 4}
-    relay_3:
         {class: digital, type: write, pin: 5}
+    relay_1:
+        {class: digital, type: write, pin: 6}
+    relay_2:
+        {class: digital, type: write, pin: 7}
+    relay_3:
+        {class: digital, type: write, pin: 8}
+    relay_4:
+        {class: digital, type: write, pin: 9}
+    relay_5:
+        {class: digital, type: write, pin: 10}
+    relay_6:
+        {class: digital, type: write, pin: 11}
+    relay_7:
+        {class: digital, type: write, pin: 12}
 
 pump:
     pump_0:
-        {class: analog, type: write, pin: 4, tachometer: flow_sensor, relay: relay_0}
+        {class: digital, type: write, pin: 4, tachometer: flow_sensor, relay: relay_0}
     pump_1:
-        {class: analog, type: write, pin: 4, tachometer: flow_sensor, relay: relay_1}
+        {class: digital, type: write, pin: 4, tachometer: flow_sensor, relay: relay_1}
     pump_2:
-        {class: analog, type: write, pin: 4, tachometer: flow_sensor, relay: relay_2}
+        {class: digital, type: write, pin: 4, tachometer: flow_sensor, relay: relay_2}
     pump_3:
-        {class: analog, type: write, pin: 4, tachometer: flow_sensor, relay: relay_3}
+        {class: digital, type: write, pin: 4, tachometer: flow_sensor, relay: relay_3}
+    pump_4:
+        {class: digital, type: write, pin: 4, tachometer: flow_sensor, relay: relay_4}
+    pump_5:
+        {class: digital, type: write, pin: 4, tachometer: flow_sensor, relay: relay_5}
+    pump_6:
+        {class: digital, type: write, pin: 4, tachometer: flow_sensor, relay: relay_6}
+    pump_7:
+        {class: digital, type: write, pin: 4, tachometer: flow_sensor, relay: relay_7}

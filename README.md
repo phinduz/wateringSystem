@@ -48,12 +48,18 @@ The system consists of:
 ### Onboard environment
 
 #### Arduino
-Arduino Mega 2560 Rev3, code: A000067, [arduino-mega-2560][arduino-mega-2560].
+Arduino Nano Rev3, [arduino-nano][arduino-nano].
+
+![arduino-nano-pinout][arduino-nano-pinout]
 
 The MCU (Arduino) is connected to peripherals with 4 different electrical interfaces, I2C, PWM, “Digital & Analog” and Serial. Design wise the MCU is aimed to be as simple as possible offering sensor data and executing watering commands. Needed configuration, calibration and transformation are targeted for implementation in off board environment (PC/Raspberry PI).
 
 
+#### Motor driver
+L298 Dual H-Bridge Motor Driver [L298-motor-driver][L298-motor-driver]
 
+#### Flow sensor
+Water flow sensor YFS 401 [flow-sensor-yfs-401][flow-sensor-yfs-401]
 
 ### Interface Onboard - Offboard
 
@@ -141,7 +147,11 @@ $ grip -b README.md
 
 [//]: # (Markdown comments)
 
-[arduino-mega-2560]: https://store.arduino.cc/mega-2560-r3
+[arduino-nano]: https://store.arduino.cc/arduino-nano
+[arduino-nano-pinout]: https://diyi0t.com/wp-content/uploads/2019/08/Arduino-Nano-Pinout-1.png
+[L298-motor-driver]: https://cdn.instructables.com/ORIG/FCN/YABW/IHNTEND4/FCNYABWIHNTEND4.pdf
+[flow-sensor-yfs-401]: https://5.imimg.com/data5/VQ/ME/MY-1833510/yf-s401-pvc-water-flow-hall-sensor-flowmeter-counter-wh.pdf
+
 [grip]: https://github.com/joeyespo/grip
 [python-pep8]: https://www.python.org/dev/peps/pep-0008/
 [real-python-pep8]: https://realpython.com/python-pep8/
